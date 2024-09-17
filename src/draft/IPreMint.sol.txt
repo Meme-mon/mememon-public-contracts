@@ -1,0 +1,14 @@
+// // SPDX-License-Identifier: MIT
+// pragma solidity 0.8.19;
+
+// interface IPreMint {
+//     event Preminted(string indexed referralCode, uint256 amount, address user);
+//     event Claimed(address indexed user, uint256 amount);
+
+//     error IPreMint_ExpirationDatePassed();
+//     error IPreMint_ReferralCodeIsNotValid();
+//     error IPreMint_TokenBuyIsNotAccept();
+//     error IPreMint_OwnerCantUseTheirCode();
+//     error IPreMint_InsufficientBalance();
+//     error IPreMint_MustBeClaimer();
+// }

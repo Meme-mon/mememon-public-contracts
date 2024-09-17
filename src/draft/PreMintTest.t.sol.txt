@@ -1,0 +1,208 @@
+// // SPDX-License-Identifier: MIT
+// pragma solidity 0.8.19;
+
+// import "forge-std/Test.sol";
+// import "src/erc1155/Egg.sol";
+// import "src/PreMint.sol";
+// import "src/erc1155/interface/IEgg.sol";
+// import "src/interface/IPreMint.sol";
+// import "test/mock/USDCMock.sol";
+// import "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+
+// contract PreMintTest is Test {
+//     Egg egg;
+//     PreMint premint;
+//     ERC20Mock usdt;
+//     USDCMock usdc;
+
+//     address owner = makeAddr("owner");
+//     address user = makeAddr("user");
+//     address user2 = makeAddr("user2");
+
+//     uint256 TOKEN_ID = 0;
+//     uint256 PREMINT_AMOUNT = 10000;
+//     uint256 USER_USDT_BALANCE = 10000;
+//     uint64 EGG_PRICE = 200;
+
+//     function setUp() external {
+//         usdt = new ERC20Mock();
+//         usdt.mint(user, USER_USDT_BALANCE);
+
+//         usdc = new USDCMock();
+
+//         vm.prank(user2);
+//         usdc.mint();
+
+//         egg = new Egg(owner);
+//         premint = new PreMint(owner, address(egg));
+
+//         vm.startPrank(owner);
+//         egg.getNewTokenId();
+//         egg.setAcceptedToken(address(usdt), true);
+//         egg.setAcceptedToken(address(usdc), true);
+//         egg.setPrice(EGG_PRICE);
+//         vm.stopPrank();
+
+//         uint8 usdtDecimals = usdt.decimals();
+//         usdt.mint(user2, USER_USDT_BALANCE * (10 ** usdtDecimals));
+//     }
+
+//     function test_can_innerPremint() public {
+//         _owner_setOperator();
+//         vm.prank(owner);
+//         premint.innerMint(0, 10000, "");
+//     }
+
+//     function test_revert_innerPremint_ifNotOwner() public {
+//         vm.expectRevert();
+//         premint.innerMint(TOKEN_ID, PREMINT_AMOUNT, "");
+//     }
+
+//     function test_revert_innerPremint_ifNotAOperator() public {
+//         vm.expectRevert(IEgg.IEgg_OnlyOperator.selector);
+//         vm.prank(owner);
+//         premint.innerMint(TOKEN_ID, PREMINT_AMOUNT, "");
+//     }
+
+//     function test_can_createReferralCode() public {
+//         vm.warp(1714028815);
+
+//         vm.prank(owner);
+//         string memory actualCode = premint.createReferralCode(1714028815 + 4 weeks, user);
+
+//         string memory expectedCode = "MEMEMONPRE0";
+
+//         console.logString(actualCode);
+
+//         assertEq(actualCode, expectedCode);
+//     }
+
+//     function test_revert_createReferralCode_ifExpirationDateError() public {
+//         vm.warp(1714028815);
+//         vm.expectRevert(IPreMint.IPreMint_ExpirationDatePassed.selector);
+//         vm.prank(owner);
+//         premint.createReferralCode(1713769615, user);
+//     }
+
+//     function test_can_premint() public {
+//         _owner_setOperator();
+//         _owner_innerPremint();
+//         uint256 mintAmount = 1;
+//         uint256 eggPriceWithDecimals = premint.getEggPriceWithTokenDecimals(address(usdt));
+
+//         string memory refCode = _owner_getNewRefferalCode();
+
+//         uint256 prevUserBalUsdt = usdt.balanceOf(user2);
+//         uint256 prevOwnerBalUsdt = usdt.balanceOf(owner);
+//         uint256 prevUserCanClaim = premint.getBalance(user2, address(usdt));
+//         uint256 prevRefOwnerCanClaim = premint.getBalance(user, address(usdt));
+
+//         vm.startPrank(user2);
+//         usdt.approve(address(premint), mintAmount * eggPriceWithDecimals);
+//         premint.premint(refCode, TOKEN_ID, mintAmount, address(usdt));
+//         vm.stopPrank();
+
+//         uint256 laterUserBalUsdt = usdt.balanceOf(user2);
+//         uint256 laterUserCanClaim = premint.getBalance(user2, address(usdt));
+//         uint256 laterRefOwnerCanClaim = premint.getBalance(user, address(usdt));
+//         uint256 laterOwnerBalUsdt = usdt.balanceOf(owner);
+
+//         assertEq(laterUserBalUsdt, prevUserBalUsdt - eggPriceWithDecimals);
+//         assertEq(prevUserCanClaim + (eggPriceWithDecimals * 5) / 100, laterUserCanClaim);
+//         assertEq(prevRefOwnerCanClaim + (eggPriceWithDecimals * 5) / 100, laterRefOwnerCanClaim);
+//         assertEq(prevOwnerBalUsdt + (eggPriceWithDecimals * 90) / 100, laterOwnerBalUsdt);
+//     }
+
+//     function test_can_premint_withUsdc() public {
+//         _owner_setOperator();
+//         _owner_innerPremint();
+
+//         uint256 mintAmount = 1;
+//         uint256 eggPriceWithDecimals = premint.getEggPriceWithTokenDecimals(address(usdc));
+
+//         string memory refCode = _owner_getNewRefferalCode();
+
+//         uint256 prevUserBalUsdc = usdc.balanceOf(user2);
+//         uint256 prevOwnerBalUsdc = usdc.balanceOf(owner);
+//         uint256 prevUserCanClaim = premint.getBalance(user2, address(usdc));
+//         uint256 prevRefOwnerCanClaim = premint.getBalance(user, address(usdc));
+
+//         vm.startPrank(user2);
+//         usdc.approve(address(premint), mintAmount * eggPriceWithDecimals);
+//         premint.premint(refCode, TOKEN_ID, mintAmount, address(usdc));
+//         vm.stopPrank();
+
+//         uint256 laterUserBalUsdc = usdc.balanceOf(user2);
+//         uint256 laterUserCanClaim = premint.getBalance(user2, address(usdc));
+//         uint256 laterRefOwnerCanClaim = premint.getBalance(user, address(usdc));
+//         uint256 laterOwnerBalUsdc = usdc.balanceOf(owner);
+
+//         assertEq(laterUserBalUsdc, prevUserBalUsdc - eggPriceWithDecimals);
+//         assertEq(prevUserCanClaim + (eggPriceWithDecimals * 5) / 100, laterUserCanClaim);
+//         assertEq(prevRefOwnerCanClaim + (eggPriceWithDecimals * 5) / 100, laterRefOwnerCanClaim);
+//         assertEq(prevOwnerBalUsdc + (eggPriceWithDecimals * 90) / 100, laterOwnerBalUsdc);
+//     }
+
+//     function test_can_claim() public {
+//         _owner_setOperator();
+//         _owner_innerPremint();
+//         _user_minted_withUSDT();
+
+//         uint256 prevUserBalUsdt = usdt.balanceOf(user);
+
+//         vm.prank(user);
+//         premint.claim(user, address(usdt));
+
+//         uint256 amountCanClaim = premint.getBalance(user, address(usdt));
+
+//         uint256 afterUserBalUsdt = usdt.balanceOf(user);
+
+//         assertEq(prevUserBalUsdt + amountCanClaim, afterUserBalUsdt);
+//     }
+
+//     function _owner_setOperator() internal {
+//         vm.prank(owner);
+//         egg.setOperator(address(premint), true);
+//     }
+
+//     function _owner_getNewRefferalCode() internal returns (string memory) {
+//         vm.prank(owner);
+//         string memory referralCode = premint.createReferralCode(1714028815, user);
+
+//         console.log("create referral code: ", referralCode);
+
+//         return referralCode;
+//     }
+
+//     function _owner_innerPremint() internal {
+//         vm.prank(owner);
+//         premint.innerMint(0, 10000, "");
+//     }
+
+//     function _user_minted_withUSDT() internal {
+//         uint256 mintAmount = 1;
+//         uint256 eggPriceWithDecimals = premint.getEggPriceWithTokenDecimals(address(usdt));
+
+//         string memory refCode = _owner_getNewRefferalCode();
+
+//         uint256 prevUserBalUsdt = usdt.balanceOf(user2);
+//         uint256 prevOwnerBalUsdt = usdt.balanceOf(owner);
+//         uint256 prevUserCanClaim = premint.getBalance(user2, address(usdt));
+//         uint256 prevRefOwnerCanClaim = premint.getBalance(user, address(usdt));
+
+//         vm.startPrank(user2);
+//         usdt.approve(address(premint), mintAmount * eggPriceWithDecimals);
+//         premint.premint(refCode, TOKEN_ID, mintAmount, address(usdt));
+//         vm.stopPrank();
+
+//         uint256 laterUserBalUsdt = usdt.balanceOf(user2);
+//         uint256 laterUserCanClaim = premint.getBalance(user2, address(usdt));
+//         uint256 laterRefOwnerCanClaim = premint.getBalance(user, address(usdt));
+//         uint256 laterOwnerBalUsdt = usdt.balanceOf(owner);
+
+//         assertEq(laterUserBalUsdt, prevUserBalUsdt - eggPriceWithDecimals);
+//         assertEq(prevUserCanClaim + (eggPriceWithDecimals * 5) / 100, laterUserCanClaim);
+//         assertEq(prevRefOwnerCanClaim + (eggPriceWithDecimals * 5) / 100, laterRefOwnerCanClaim);
+//         assertEq(prevOwnerBalUsdt + (eggPriceWithDecimals * 90) / 100, laterOwnerBalUsdt);
+//     }
+// }

@@ -1,0 +1,153 @@
+// // SPDX-License-Identifier: MIT
+// pragma solidity 0.8.19;
+
+// import "@openzeppelin/contracts/access/Ownable.sol";
+// import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+// import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+// import "@openzeppelin/contracts/utils/Strings.sol";
+// import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+// import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// import "src/erc1155/Egg.sol";
+// import "src/interface/IPreMint.sol";
+
+// contract PreMint is IPreMint, Ownable, ERC1155Holder {
+//     using SafeERC20 for ERC20;
+
+//     // ========= Storage variables
+
+//     struct ReferralInfo {
+//         uint256 expirationDate;
+//         address owner;
+//         bool isActive;
+//     }
+
+//     mapping(string => ReferralInfo) private s_referralInfo;
+//     uint256 private s_currentReferralId;
+//     mapping(string => uint256) private s_refCodeToId;
+//     mapping(address => string[]) private s_ownerToRefCode;
+//     mapping(address user => mapping(address token => uint256 balance)) private s_balances;
+//     address private s_vaultAddr;
+
+//     address private immutable i_eggContract;
+
+//     // ========== Constructor
+//     constructor(address _initialOwner, address _eggContract) Ownable(_initialOwner) {
+//         i_eggContract = _eggContract;
+//         s_vaultAddr = _initialOwner;
+//     }
+
+//     // ========== Owner functions
+//     function innerMint(uint256 id, uint256 amount, bytes memory data) external onlyOwner {
+//         IEgg(i_eggContract).operatorMint(id, address(this), amount, data);
+//     }
+
+//     function createReferralCode(uint256 _expirationDate, address _refCodeOwner)
+//         external
+//         onlyOwner
+//         returns (string memory referralCode)
+//     {
+//         if (_expirationDate < block.timestamp) {
+//             revert IPreMint_ExpirationDatePassed();
+//         }
+
+//         referralCode = string(abi.encodePacked("MEMEMONPRE", Strings.toString(s_currentReferralId)));
+
+//         ReferralInfo storage refInfo = s_referralInfo[referralCode];
+//         refInfo.expirationDate = _expirationDate;
+//         refInfo.owner = _refCodeOwner;
+//         refInfo.isActive = true;
+//         s_ownerToRefCode[_refCodeOwner].push(referralCode);
+
+//         s_currentReferralId++;
+//     }
+
+//     function changeRefCodeStatus(string memory _referralCode, bool status) public onlyOwner {
+//         s_referralInfo[_referralCode].isActive = status;
+//     }
+
+//     // ========== Public functions
+//     function premint(string memory _referralCode, uint256 _tokenId, uint256 _amount, address tokenBuy) external {
+//         bool isCodeActive = _checkReferralCode(_referralCode);
+//         if (isCodeActive == false) {
+//             revert IPreMint_ReferralCodeIsNotValid();
+//         }
+
+//         bool isTokenBuyAccepted = Egg(i_eggContract).getTokenBuyIsValid(tokenBuy);
+//         if (isTokenBuyAccepted == false) {
+//             revert IPreMint_TokenBuyIsNotAccept();
+//         }
+
+//         ReferralInfo memory refInfo = s_referralInfo[_referralCode];
+
+//         if (refInfo.owner == msg.sender) {
+//             revert IPreMint_OwnerCantUseTheirCode();
+//         }
+
+//         uint256 eggPrice = IEgg(i_eggContract).getEggPrice();
+//         uint8 tokenDecimals = ERC20(tokenBuy).decimals();
+//         uint256 priceWithTokenDecimals = _getPriceWithTokenDecimals(tokenDecimals, eggPrice);
+
+//         s_balances[refInfo.owner][tokenBuy] = (priceWithTokenDecimals * 5) / 100;
+//         s_balances[msg.sender][tokenBuy] = (priceWithTokenDecimals * 5) / 100;
+
+//         ERC20(tokenBuy).safeTransferFrom(msg.sender, address(this), priceWithTokenDecimals * _amount);
+//         IERC1155(i_eggContract).safeTransferFrom(address(this), msg.sender, _tokenId, _amount, "");
+//         ERC20(tokenBuy).safeTransfer(s_vaultAddr, (priceWithTokenDecimals * 90) / 100);
+
+//         emit Preminted(_referralCode, _amount, msg.sender);
+//     }
+
+//     function claim(address claimer, address tokenAddr) external {
+//         if (claimer != msg.sender) {
+//             revert IPreMint_MustBeClaimer();
+//         }
+
+//         uint256 balance = s_balances[claimer][tokenAddr];
+
+//         if (balance <= 0) {
+//             revert IPreMint_InsufficientBalance();
+//         }
+
+//         ERC20(tokenAddr).safeTransfer(claimer, balance);
+
+//         emit Claimed(claimer, balance);
+//     }
+
+//     // ========== Internal functions
+//     function _checkReferralCode(string memory _refferalCode) internal view returns (bool isValid) {
+//         ReferralInfo memory refInfo = s_referralInfo[_refferalCode];
+//         if (refInfo.expirationDate > block.timestamp && refInfo.isActive == true) {
+//             return true;
+//         }
+//         return false;
+//     }
+
+//     function _getPriceWithTokenDecimals(uint8 tokenDecimals, uint256 eggPrice) internal pure returns (uint256) {
+//         return eggPrice * (10 ** tokenDecimals);
+//     }
+
+//     // ========== Getter functions
+//     function getEggPriceWithTokenDecimals(address tokenAddr) public view returns (uint256) {
+//         uint8 tokenDecimals = ERC20(tokenAddr).decimals();
+//         uint256 eggPrice = Egg(i_eggContract).getEggPrice();
+
+//         return _getPriceWithTokenDecimals(tokenDecimals, eggPrice);
+//     }
+
+//     function getBalance(address user, address tokenAddr) public view returns (uint256) {
+//         return s_balances[user][tokenAddr];
+//     }
+
+//     function getIsReferralCodeValid(string memory _referralCode) public view returns (bool) {
+//         return _checkReferralCode(_referralCode);
+//     }
+
+//     function getReferralCodeInfo(string memory _referralCode) public view returns (ReferralInfo memory) {
+//         return s_referralInfo[_referralCode];
+//     }
+
+//     function getReferralCodeByAddress(address owner) public view returns (string[] memory) {
+//         return s_ownerToRefCode[owner];
+//     }
+// }
